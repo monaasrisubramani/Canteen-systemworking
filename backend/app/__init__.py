@@ -1,0 +1,1 @@
+"""College canteen backend application."""
