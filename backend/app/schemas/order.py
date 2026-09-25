@@ -81,7 +81,11 @@ class OrderResponse(BaseModel):
     user_id: int
     total_amount: Decimal
     status: str
-    items: list[OrderItemResponse]
+    payment_status: str | None = None
+    token_code: str | None = None
+    transaction_reference: str | None = None
+    created_at: datetime | None = None
+    items: list[OrderItemResponse] = []
 
 
 class OrderStatusUpdate(BaseModel):
@@ -106,6 +110,7 @@ class AdminOrderResponse(BaseModel):
     customer_email: str
     total_amount: Decimal
     status: str
+    payment_status: str | None = None
     token_code: str | None = None
     created_at: datetime
     updated_at: datetime

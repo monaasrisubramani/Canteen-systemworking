@@ -64,6 +64,7 @@ def get_admin_summary(
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
+from app.models.enums import PaymentStatus
 from app.repositories.menu_repository import MenuRepository
 from app.repositories.order_repository import OrderRepository
 from app.schemas.order import OrderCreate, OrderItemResponse, OrderResponse
@@ -82,11 +83,20 @@ def serialize(order):
         )
         for item in order.items
     ]
+    latest_payment = order.payments[-1] if hasattr(order, "payments") and order.payments else None
+    has_success_payment = any(p.status == PaymentStatus.SUCCESS for p in order.payments) if hasattr(order, "payments") and order.payments else False
+    payment_status = "SUCCESS" if has_success_payment else (latest_payment.status.value if latest_payment else "UNPAID")
+    token_code = order.token.token_code if hasattr(order, "token") and order.token else None
+    transaction_ref = latest_payment.transaction_reference if latest_payment else None
     return OrderResponse(
         id=order.id,
         user_id=order.user_id,
         total_amount=order.total_amount,
         status=order.status.value if hasattr(order.status, "value") else str(order.status),
+        payment_status=payment_status,
+        token_code=token_code,
+        transaction_reference=transaction_ref,
+        created_at=order.created_at,
         items=items,
     )
 

@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from app.api.dependencies import get_db, require_admin
 from app.core.exceptions import AppError
-from app.models.enums import OrderStatus
+from app.models.enums import OrderStatus, PaymentStatus
 from app.models.menu_item import MenuItem
 from app.models.order import Order, OrderItem
 from app.repositories.menu_repository import MenuRepository
@@ -25,6 +25,9 @@ def _serialize_order(order: Order) -> AdminOrderResponse:
     customer_name = order.user.name if order.user else f"User #{order.user_id}"
     customer_email = order.user.email if order.user else ""
     token_code = order.token.token_code if order.token else None
+    has_success_payment = any(p.status == PaymentStatus.SUCCESS for p in order.payments) if hasattr(order, "payments") and order.payments else False
+    latest_payment = order.payments[-1] if hasattr(order, "payments") and order.payments else None
+    payment_status = "SUCCESS" if has_success_payment else (latest_payment.status.value if latest_payment else "UNPAID")
 
     items = []
     for item in order.items:
@@ -47,6 +50,7 @@ def _serialize_order(order: Order) -> AdminOrderResponse:
         customer_email=customer_email,
         total_amount=order.total_amount,
         status=order.status.value if hasattr(order.status, "value") else str(order.status),
+        payment_status=payment_status,
         token_code=token_code,
         created_at=order.created_at,
         updated_at=order.updated_at,
@@ -118,6 +122,7 @@ def admin_orders(
         .options(
             selectinload(Order.user),
             selectinload(Order.token),
+            selectinload(Order.payments),
             selectinload(Order.items).selectinload(OrderItem.menu_item),
         )
         .order_by(Order.created_at.desc())

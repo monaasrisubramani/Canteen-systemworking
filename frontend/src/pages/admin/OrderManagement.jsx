@@ -14,7 +14,7 @@ import {
   Ticket,
 } from 'lucide-react';
 import { AdminAPI } from '../../api/admin';
-import { StatusBadge } from '../../components/Badge';
+import { StatusBadge, PaymentBadge } from '../../components/Badge';
 
 export function OrderManagement({ onShowToast }) {
   const [orders, setOrders] = useState([]);
@@ -249,7 +249,10 @@ export function OrderManagement({ onShowToast }) {
                       <span>{formatDate(order.created_at)} at {formatTime(order.created_at)}</span>
                     </div>
                   </div>
-                  <StatusBadge status={order.status} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    {order.payment_status && <PaymentBadge status={order.payment_status} />}
+                    <StatusBadge status={order.status} />
+                  </div>
                 </div>
 
                 <div className="order-customer">

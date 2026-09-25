@@ -1,6 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChefHat, History, LogOut, Minus, Plus, Search, ShoppingCart, UtensilsCrossed, XCircle } from 'lucide-react';
-import { StatusBadge } from '../../components/Badge';
+import {
+  ChefHat,
+  CreditCard,
+  History,
+  LogOut,
+  Minus,
+  Plus,
+  Search,
+  ShoppingCart,
+  Smartphone,
+  Ticket,
+  UtensilsCrossed,
+  XCircle,
+} from 'lucide-react';
+import { StatusBadge, PaymentBadge } from '../../components/Badge';
+import { UPIPaymentModal } from '../../components/UPIPaymentModal';
 
 const API_URL = 'http://127.0.0.1:8000';
 
@@ -16,6 +30,9 @@ export function StudentPortal({ user, onLogout }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [availableOnly, setAvailableOnly] = useState(false);
   const [sortBy, setSortBy] = useState('default');
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
+  const [placingOrder, setPlacingOrder] = useState(false);
 
   const request = async (path, options = {}) => {
     const token = localStorage.getItem('canteen_student_token');
@@ -83,18 +100,30 @@ export function StudentPortal({ user, onLogout }) {
     return next;
   });
 
-  const placeOrder = async () => {
+  const placeOrderAndPay = async () => {
     if (!cartItems.length) return;
+    setPlacingOrder(true);
     try {
       const order = await request('/api/orders', {
         method: 'POST',
         body: JSON.stringify({ items: cartItems.map((item) => ({ menu_item_id: item.id, quantity: item.quantity })) }),
       });
       setCart({});
-      setMessage(`Order #${order.id} placed successfully.`);
-      setActiveTab('orders');
+      setMessage(`Order #${order.id} placed! Complete UPI payment below.`);
       await load();
-    } catch (error) { setMessage(error.message); }
+      setSelectedOrderForPayment(order);
+      setPaymentModalOpen(true);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setPlacingOrder(false);
+    }
+  };
+
+  const handlePaymentSuccess = async (paymentData, tokenCode) => {
+    setMessage(`Payment successful for Order #${paymentData.order_id}! Pickup Token: ${tokenCode || ''}`);
+    await load();
+    setActiveTab('orders');
   };
 
   const cancelOrder = async (orderId) => {
@@ -252,12 +281,267 @@ const menuView = (
       )}
     </div>
   );
-  const cartView = <section className="card-container" style={{ padding: '1.25rem' }}>{cartItems.length ? <><div className="page-header"><div className="page-title"><h2>Your cart</h2><p>Review quantities before placing your order.</p></div><button className="btn btn-primary" onClick={placeOrder}>Place order · ₹{total.toFixed(2)}</button></div>{cartItems.map((item) => <div className="order-item-row" style={{ padding: '.85rem 0', borderBottom: '1px solid var(--color-border)' }} key={item.id}><div><strong>{item.name}</strong><div className="customer-sub">₹{Number(item.price).toFixed(2)} each</div></div><div className="order-actions"><button className="btn btn-secondary btn-sm" onClick={() => changeQuantity(item, -1)}><Minus size={15} /></button><span>{item.quantity}</span><button className="btn btn-primary btn-sm" onClick={() => changeQuantity(item, 1)}><Plus size={15} /></button><strong style={{ minWidth: '5rem', textAlign: 'right' }}>₹{(Number(item.price) * item.quantity).toFixed(2)}</strong></div></div>)}<div className="order-footer"><strong>Total</strong><strong className="order-total-val">₹{total.toFixed(2)}</strong></div></> : <div className="state-box"><ShoppingCart /><h4>Your cart is empty</h4><button className="btn btn-primary" onClick={() => setActiveTab('menu')}>Browse menu</button></div>}</section>;
+  const cartView = (
+    <section className="card-container" style={{ padding: '1.25rem' }}>
+      {cartItems.length ? (
+        <>
+          <div className="page-header">
+            <div className="page-title">
+              <h2>Your Cart</h2>
+              <p>Review quantities and pay instantly using UPI (Google Pay, PhonePe, Paytm, QR).</p>
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={placeOrderAndPay}
+              disabled={placingOrder}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.25rem' }}
+            >
+              <CreditCard size={18} />
+              <span>{placingOrder ? 'Processing...' : `Pay via UPI · ₹${total.toFixed(2)}`}</span>
+            </button>
+          </div>
+          {cartItems.map((item) => (
+            <div
+              className="order-item-row"
+              style={{ padding: '.85rem 0', borderBottom: '1px solid var(--color-border)' }}
+              key={item.id}
+            >
+              <div>
+                <strong>{item.name}</strong>
+                <div className="customer-sub">₹{Number(item.price).toFixed(2)} each</div>
+              </div>
+              <div className="order-actions">
+                <button className="btn btn-secondary btn-sm" onClick={() => changeQuantity(item, -1)}>
+                  <Minus size={15} />
+                </button>
+                <span>{item.quantity}</span>
+                <button className="btn btn-primary btn-sm" onClick={() => changeQuantity(item, 1)}>
+                  <Plus size={15} />
+                </button>
+                <strong style={{ minWidth: '5rem', textAlign: 'right' }}>
+                  ₹{(Number(item.price) * item.quantity).toFixed(2)}
+                </strong>
+              </div>
+            </div>
+          ))}
+          <div className="order-footer">
+            <strong>Total</strong>
+            <strong className="order-total-val">₹{total.toFixed(2)}</strong>
+          </div>
+        </>
+      ) : (
+        <div className="state-box">
+          <ShoppingCart />
+          <h4>Your cart is empty</h4>
+          <button className="btn btn-primary" onClick={() => setActiveTab('menu')}>
+            Browse menu
+          </button>
+        </div>
+      )}
+    </section>
+  );
 
-  const ordersView = <div className="orders-grid">{orders.length ? orders.map((order) => { const canCancel = order.status === 'PLACED'; return <div className="order-card" key={order.id}><div className="order-card-header"><strong>Order #{order.id}</strong><StatusBadge status={order.status} /></div>{order.items.map((item) => <div className="order-item-row" key={item.id}><span>{item.quantity}× item #{item.menu_item_id}</span><span>₹{Number(item.subtotal).toFixed(2)}</span></div>)}<div className="order-footer"><strong>Total: ₹{Number(order.total_amount).toFixed(2)}</strong>{canCancel && <button className="btn btn-secondary btn-sm" onClick={() => cancelOrder(order.id)} disabled={cancellingId === order.id}><XCircle size={15} />{cancellingId === order.id ? 'Cancelling...' : 'Cancel Order'}</button>}</div></div>; }) : <div className="state-box"><History /><h4>No orders yet</h4><button className="btn btn-primary" onClick={() => setActiveTab('menu')}>Order something</button></div>}</div>;
+  const ordersView = (
+    <div className="orders-grid">
+      {orders.length ? (
+        orders.map((order) => {
+          const isPaid = order.payment_status === 'SUCCESS' || !!order.token_code;
+          const canCancel = order.status === 'PLACED' && !isPaid;
 
-  const tabs = [{ id: 'menu', label: 'Menu', icon: UtensilsCrossed }, { id: 'cart', label: `View Cart (${quantity})`, icon: ShoppingCart }, { id: 'orders', label: 'Order History', icon: History }];
+          return (
+            <div className="order-card" key={order.id}>
+              <div className="order-card-header">
+                <div className="order-id-block">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span className="order-number">Order #{order.id}</span>
+                    <PaymentBadge status={order.payment_status} />
+                  </div>
+                  {order.created_at && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)', marginTop: 2 }}>
+                      {new Date(order.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })} at{' '}
+                      {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <StatusBadge status={order.status} />
+              </div>
+
+              {/* Digital Pickup Token Box when paid */}
+              {order.token_code && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'rgba(234, 88, 12, 0.12)',
+                    border: '1.5px dashed var(--color-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.65rem 0.9rem',
+                    margin: '0.65rem 0 0.25rem 0',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <Ticket size={22} color="var(--color-primary)" />
+                    <div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--color-text-dim)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
+                        Pickup Token
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--color-primary)', letterSpacing: '0.08em' }}>
+                        {order.token_code}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', display: 'block' }}>Show at counter</span>
+                    {order.transaction_reference && (
+                      <span style={{ fontSize: '0.68rem', color: 'var(--color-text-dim)', fontFamily: 'monospace' }}>
+                        {order.transaction_reference}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Order Items list */}
+              <div className="order-items-list" style={{ marginTop: '0.5rem' }}>
+                {(order.items || []).map((item) => (
+                  <div className="order-item-row" key={item.id}>
+                    <span>
+                      <span className="order-item-qty">{item.quantity}×</span> item #{item.menu_item_id}
+                    </span>
+                    <span>₹{Number(item.subtotal).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="order-footer">
+                <div className="order-total-block">
+                  <span className="order-total-label">Total</span>
+                  <span className="order-total-val">₹{Number(order.total_amount).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {!isPaid && order.status !== 'CANCELLED' && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        setSelectedOrderForPayment(order);
+                        setPaymentModalOpen(true);
+                      }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                      <Smartphone size={14} />
+                      <span>Pay with UPI</span>
+                    </button>
+                  )}
+                  {canCancel && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => cancelOrder(order.id)}
+                      disabled={cancellingId === order.id}
+                    >
+                      <XCircle size={15} />
+                      <span>{cancellingId === order.id ? 'Cancelling...' : 'Cancel'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <div className="state-box">
+          <History />
+          <h4>No orders yet</h4>
+          <button className="btn btn-primary" onClick={() => setActiveTab('menu')}>
+            Order something
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const tabs = [
+    { id: 'menu', label: 'Menu', icon: UtensilsCrossed },
+    { id: 'cart', label: `View Cart (${quantity})`, icon: ShoppingCart },
+    { id: 'orders', label: 'Order History', icon: History },
+  ];
   const content = activeTab === 'menu' ? menuView : activeTab === 'cart' ? cartView : ordersView;
 
-  return <div className="app-container"><nav className="navbar"><div className="navbar-inner"><div className="brand"><div className="brand-icon"><ChefHat size={22} /></div><div className="brand-text"><h1>Smart Canteen</h1><span>Student ordering</span></div></div><div className="nav-links">{tabs.map((tab) => { const Icon = tab.icon; return <button key={tab.id} className={`nav-item ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)}><Icon size={16} />{tab.label}</button>; })}</div><div className="nav-user"><span className="user-name">{user.name}</span><button className="btn-logout" onClick={onLogout}><LogOut size={16} />Logout</button></div></div></nav><main className="main-content"><div className="page-header"><div className="page-title"><h2>{activeTab === 'menu' ? 'Today’s Menu' : activeTab === 'cart' ? 'Your Cart' : 'Order History'}</h2><p>{activeTab === 'menu' ? 'Add available dishes to your cart.' : activeTab === 'cart' ? 'Review and place your order.' : 'Track orders placed from this account.'}</p></div><button className="btn btn-secondary" onClick={load}>Refresh</button></div>{message && <div className="toast toast-info" style={{ position: 'static', marginBottom: '1rem' }}>{message}</div>}{loading ? <div className="state-box"><div className="spinner" /><p>Loading…</p></div> : content}</main></div>;
+  return (
+    <div className="app-container">
+      <nav className="navbar">
+        <div className="navbar-inner">
+          <div className="brand">
+            <div className="brand-icon">
+              <ChefHat size={22} />
+            </div>
+            <div className="brand-text">
+              <h1>Smart Canteen</h1>
+              <span>Student ordering</span>
+            </div>
+          </div>
+          <div className="nav-links">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <Icon size={16} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="nav-user">
+            <span className="user-name">{user.name}</span>
+            <button className="btn-logout" onClick={onLogout}>
+              <LogOut size={16} />Logout
+            </button>
+          </div>
+        </div>
+      </nav>
+      <main className="main-content">
+        <div className="page-header">
+          <div className="page-title">
+            <h2>{activeTab === 'menu' ? 'Today’s Menu' : activeTab === 'cart' ? 'Your Cart' : 'Order History'}</h2>
+            <p>
+              {activeTab === 'menu'
+                ? 'Add available dishes to your cart.'
+                : activeTab === 'cart'
+                ? 'Review quantities and pay instantly via UPI.'
+                : 'Track orders, UPI payments, and view pickup tokens.'}
+            </p>
+          </div>
+          <button className="btn btn-secondary" onClick={load}>
+            Refresh
+          </button>
+        </div>
+        {message && (
+          <div className="toast toast-info" style={{ position: 'static', marginBottom: '1rem' }}>
+            {message}
+          </div>
+        )}
+        {loading ? (
+          <div className="state-box">
+            <div className="spinner" />
+            <p>Loading…</p>
+          </div>
+        ) : (
+          content
+        )}
+      </main>
+
+      {/* UPI Payment Gateway Modal */}
+      <UPIPaymentModal
+        isOpen={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        order={selectedOrderForPayment}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
+    </div>
+  );
 }

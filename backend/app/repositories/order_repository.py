@@ -45,6 +45,27 @@ from app.models.order import Order
 
 class OrderRepository:
     def __init__(self, session: Session): self.session = session
-    def get_by_id(self, order_id: int): return self.session.scalar(select(Order).options(selectinload(Order.items)).where(Order.id == order_id))
-    def list_for_user(self, user_id: int): return list(self.session.scalars(select(Order).where(Order.user_id == user_id).order_by(Order.created_at.desc())))
+    def get_by_id(self, order_id: int):
+        return self.session.scalar(
+            select(Order)
+            .options(
+                selectinload(Order.items),
+                selectinload(Order.payments),
+                selectinload(Order.token),
+            )
+            .where(Order.id == order_id)
+        )
+    def list_for_user(self, user_id: int):
+        return list(
+            self.session.scalars(
+                select(Order)
+                .options(
+                    selectinload(Order.items),
+                    selectinload(Order.payments),
+                    selectinload(Order.token),
+                )
+                .where(Order.user_id == user_id)
+                .order_by(Order.created_at.desc())
+            )
+        )
     def create(self, order: Order): self.session.add(order); self.session.flush(); return order

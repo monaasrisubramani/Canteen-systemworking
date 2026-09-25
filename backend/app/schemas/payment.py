@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class PaymentRequest(BaseModel):
     payment_method: str = Field(default="UPI")
     upi_id: str = Field(min_length=3, max_length=255)
+    upi_app: str | None = Field(default=None)
 
 class PaymentResponse(BaseModel):
     id: int
@@ -11,4 +12,5 @@ class PaymentResponse(BaseModel):
     amount: Decimal
     payment_method: str
     status: str
-    transaction_reference: str | None
+    transaction_reference: str | None = None
+    token_code: str | None = None
