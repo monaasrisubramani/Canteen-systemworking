@@ -67,7 +67,24 @@ from app.models.menu_item import MenuItem
 
 class MenuRepository:
     def __init__(self, session: Session): self.session = session
-    def list_all(self): return list(self.session.scalars(select(MenuItem).order_by(MenuItem.category, MenuItem.name)))
+    def list_all(
+        self,
+        category: str | None = None,
+        available_only: bool = False,
+        search: str | None = None,
+        ):
+        from sqlalchemy import func
+        stmt = select(MenuItem).order_by(MenuItem.category, MenuItem.name)
+        if category and category.strip().lower() != "all":
+            stmt = stmt.where(func.lower(MenuItem.category) == category.strip().lower())
+        if available_only:
+            stmt = stmt.where(MenuItem.is_available.is_(True))
+        if search and search.strip():
+            term = f"%{search.strip().lower()}%"
+            stmt = stmt.where(
+                func.lower(MenuItem.name).like(term) | func.lower(MenuItem.description).like(term)
+            )
+        return list(self.session.scalars(stmt))
     def get_by_id(self, item_id: int): return self.session.get(MenuItem, item_id)
     def get_by_ids(self, ids: list[int]): return list(self.session.scalars(select(MenuItem).where(MenuItem.id.in_(ids))))
     def create(self, item: MenuItem): self.session.add(item); self.session.flush(); return item

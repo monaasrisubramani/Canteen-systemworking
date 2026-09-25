@@ -164,7 +164,17 @@ from app.schemas.menu import MenuItemCreate, MenuItemUpdate
 
 class MenuService:
     def __init__(self, menu: MenuRepository): self.menu = menu
-    def list_items(self): return self.menu.list_all()
+    def list_items(
+        self,
+        category: str | None = None,
+        available_only: bool = False,
+        search: str | None = None,
+        ):
+        return self.menu.list_all(
+            category=category,
+            available_only=available_only,
+            search=search,
+        )
     def create(self, data: MenuItemCreate):
         if any(item.name.lower() == data.name.lower() for item in self.menu.list_all()): raise AppError("A menu item with this name already exists", 409)
         return self.menu.create(MenuItem(**data.model_dump()))
