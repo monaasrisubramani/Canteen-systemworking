@@ -72,8 +72,18 @@ def admin_summary(_: object = Depends(require_admin), db: Session = Depends(get_
 
 
 @router.get("/menu", response_model=list[MenuItemResponse])
-def menu(_: object = Depends(require_admin), db: Session = Depends(get_db)):
-    return MenuService(MenuRepository(db)).list_items()
+def menu(
+    category: str | None = Query(default=None),
+    available_only: bool = Query(default=False),
+    search: str | None = Query(default=None),
+    _: object = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return MenuService(MenuRepository(db)).list_items(
+        category=category,
+        available_only=available_only,
+        search=search,
+    )
 
 
 @router.post("/menu", response_model=MenuItemResponse, status_code=status.HTTP_201_CREATED)
